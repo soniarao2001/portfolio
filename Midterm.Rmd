@@ -1,0 +1,264 @@
+---
+title: "Midterm"
+author: "Sonia Rao"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+pacman::p_load("dplyr", "tidyverse", "Hmisc", "rio", "skimr", "lubridate", "janitor")
+
+```
+
+```{r}
+getwd()
+```
+
+```{r}
+speedingcops <- read_csv("midterm/speeding-cops-data.csv")
+```
+
+```{r}
+#Get a summary of the data
+summary(speedingcops)
+n_distinct(speedingcops$transponder)
+
+```
+
+```{r}
+#change data date column to a date class
+speedingcops$date <- mdy(speedingcops$date)
+```
+
+
+#1 “A three-month Sun Sentinel investigation found almost 800 cops from a dozen agencies driving 90 to 130 mph on our highways.”
+
+```{r}
+
+#From the data given, I am defining a cop as an individual transponder number. 
+
+speedingcops %>%
+  filter(mph >= 90, mph <= 130) %>%
+  summarise(transponders = n_distinct(transponder),
+            agencies = n_distinct(agency)
+            )
+
+#334 cops from 11 agencies were driving 90 to 130 mph on Florida highways. 
+```
+
+#2 “793 transponders assigned to police agencies showed evidence of speeding — and habitual speeding by some officers. 
+```{r}
+
+speedingcops %>%
+  filter(mph >=90) %>%
+  count(transponder) %>%
+  arrange(-n) 
+ 
+#As found in the previous question, 334 transponders showed evidence of speeding. Instances of speeding ranged from 494 times for one transponder, to two times for other transponders. Eighteen officers sped over 50 times. 
+
+```
+#3 “One out of five police cars hit speeds above 90 mph.”
+```{r}
+tabyl(speedingcops$mph<90)
+
+#Out of the 72,858 data points recorded of 334 transponders, 6.81 percent were speeds above 90 mph. 
+
+#(I don't think it's accurate to say 6 percent of police cars hit speeds above 90 mph, because the 6 percent is the percentage of speeding instances total, not speeding instances per car. But 100 percent of the cars in our data frame sped at least once, so for the sake of the statement I wanted a percentage that showed an accurate proportion of speeding)
+
+```
+
+
+
+#4 “Total high-speed incidents: 5,100 in a 13-month period.”
+
+```{r}
+
+
+highspeedingcops <- 
+  speedingcops %>%
+   filter(mph>90)
+
+highspeedingcops %>%
+  count()
+
+difftime(max(highspeedingcops$date), min(highspeedingcops$date), units = "weeks")
+
+#There were 4,432 high-speed incidents over a 13-month period. 
+```
+
+#5 “Most of the high speeds — 96 percent — were between 90 and 110 mph.”
+```{r}
+
+janitor::tabyl(highspeedingcops$mph<=110)
+
+#96.8 percent of high speeds were between 90 and 110 mph. 
+```
+
+#6 “More than half of the high-speed incidents involved many of them driving regular routes.”
+```{r}
+
+regularroutes <- 
+highspeedingcops %>%
+  group_by(agency, transponder, from, to) %>%
+  count() %>%
+  arrange(desc(n)) 
+    
+regularroutes
+
+tabyl(regularroutes$n > 50)
+
+#3 percent of speeding incidents over 90 mph involved cops driving routes they had driven over 20 times.  
+
+
+```
+
+
+#7 “Almost 30 percent of the transponders assigned to the Palm Beach County Sheriff's Office showed speeds above 90 mph.”
+```{r}
+
+  palmbeachspeeds <- speedingcops %>%
+    filter(agency == "PBSO") %>%
+    group_by(agency, transponder) %>%
+    summarise(
+      trips = n(),
+      speeding = any(mph > 90)
+      )
+
+palmbeachspeeds %>% janitor::tabyl(speeding)
+  
+
+#100 percent of transponders assigned to the Palm Beach County Sheriff's Office showed speeds above 90 mph at least once. 
+
+```
+
+#8 “At the Broward Sheriff's Office, 18 percent of the transponders registered speeds above 90 and as high as 122 mph, the SunPass analysis found.”
+```{r}
+BSO <- speedingcops %>%
+  filter(agency == "BSO") %>%
+   group_by(transponder) %>%
+    summarise(
+      trips = n(),
+      speeding = any(mph > 90),
+      highspeeding = any(mph>122)
+      )
+  
+janitor::tabyl(BSO$speeding == "TRUE" & browardspeeding$highspeeding == "TRUE")
+
+#14 percent of Broward Sheriff's Office transponders registered speeds above 90 and as high as 122 mph.
+```
+
+
+
+#9 “Cops drove the fastest from late at night to 6 a.m., when shifts change and traffic is lightest.”
+
+```{r}
+
+fastdriving <- 
+highspeedingcops %>%
+  mutate(ampm = case_when(
+    hour(start_time) <= 6 ~ "am", 
+    hour(start_time) >= 6 ~ "pm")
+    )
+
+tabyl(fastdriving$ampm)
+
+
+#57 percent of speeding instances occured between midnight and 6 a.m. 
+```
+
+
+#10 “Miami officers were among the most chronic speeders, with 143 of them driving over 90 mph, the SunPass analysis found. More than 50 Miami cops broke 100 mph — one more than 100 times.
+```{r}
+speedingcops %>%
+  filter(agency == "Miami PD" & mph>90) %>% 
+  group_by(transponder) %>%
+  summarise(
+    tripsover90 = n()
+    ) 
+
+#73 Miami cops drove over 90 mph at least once. 
+
+speedingcops %>%
+  filter(agency == "Miami PD" & mph>100) %>% 
+  group_by(transponder) %>%
+  summarise(
+    tripsover100 = n()
+    ) %>% arrange(desc(tripsover100))
+
+#35 Miami cops drove over 100 mph at least once. One cop drove over 100 mph 153 times. 
+  
+```
+
+
+#11 “The Miami cop who drove the fastest on the turnpike hit 125 mph one morning about 4 a.m.”
+```{r}
+speedingcops %>%
+  filter(agency == "Miami PD") %>%
+  filter(from == "SR874 South (at Turnpike)" | to == "SR874 South (at Turnpike)") %>%
+  arrange(-mph)
+
+#The Miami cop who drove the fastest on the turnpike hit 125.5 mph one morning at about 3:49 a.m.
+```
+
+#12 “The speed leader reached 117 mph and drove over 100 mph on 36 days.”
+```{r}
+
+#Find the transponder who had the highest average speed?
+speedingcops %>% arrange(-mph)
+
+speedleader <- speedingcops %>%
+  filter(transponder == "102230660110") %>%
+  filter(mph > 100)
+
+View(speedleader)
+
+n_distinct(speedleader$date)
+
+#The cop who drove the fastest speed reached 129.8 miles on Aug. 25, 2011 at 3:52 a.m. This cop drove over 100 mph on 43 days. 
+
+```
+
+
+#13 “At the Miami Beach Police Department, 54 officers drove over 90 mph, the analysis found. Many hit speeds over 100 mph.”
+```{r}
+MiamiBeachhighspeedingcops <- highspeedingcops %>%
+  filter(agency == "Miami Beach PD")
+
+n_distinct(MiamiBeachhighspeedingcops$transponder)
+
+count(MiamiBeachhighspeedingcops, mph>100)
+
+
+#30 officers drove over 90mph. There were 468 instances of cops hitting speeds over 100mph.
+
+```
+
+
+#14 “More than 270 Miami-Dade cops drove over 90 mph and as fast as 115 mph.”
+```{r}
+highspeedingcops %>% filter(agency == "Miami-Dade PD", mph<=115) %>% 
+  summarise(cops = n_distinct(transponder))
+
+#84 Miami-Dade cops drove over 90 mph and as fast as 115 mph. 
+
+```
+
+#15 “Florida Highway Patrol troopers drove the fastest among the cops examined, at speeds as high as 130 mph, according to the SunPass records.”
+```{r}
+FHP <- speedingcops %>%
+  group_by(agency) %>%
+  summarise(
+    trips = n(), 
+    avgspeed = mean(mph),
+    maxspeed = max(mph)
+  ) %>% arrange(-maxspeed)
+
+#The cop that reached the highest speed, 129.8 mph, was a Florida Highway Patrol trooper. 
+```
+
+
+
